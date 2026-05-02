@@ -9,21 +9,26 @@ load_dotenv()
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 DEFAULT_BRAND_VOICE = (
-    "Pixii is a bold, Gen-Z energy drink brand. Voice: witty, punchy, irreverent, meme-aware. "
-    "Target: 18-28 year olds who love gaming, fitness, and hustle culture."
+    "Pixii is an AI designer for Amazon listings. It creates beautiful, editable listing designs "
+    "with zero prompts — scaling 1 listing to 1,000 products in 2 minutes, vs $5,000 and 9 weeks "
+    "with an agency. Proven to grow Amazon revenue 30-300%. Founded as a Bain & Company spin-out; "
+    "customers doing $10B+ revenue. Vision: 'Visuals that sell, everywhere you sell.' "
+    "Voice: confident, ROI-obsessed, founder-credible. Audience: Amazon sellers, DTC brands, "
+    "e-commerce operators. Lead with speed, scale, and revenue impact."
 )
 
-GENERATION_PROMPT = """You are a viral social media copywriter for the brand Pixii.
+GENERATION_PROMPT = """You are a viral social media copywriter for Pixii.
 
-Brand voice: {brand_voice}
+Brand context: {brand_voice}
 
 Using the following proven hook patterns from our Hook Library, write {count} social media posts for Pixii. Each post should:
 1. Use one of the hook patterns as its opening structure
-2. Be tailored for {platform}
-3. Stay true to the Pixii brand voice
-4. Be ready to post (no placeholders)
-5. Include relevant emojis where natural
-6. Be under 280 characters for Twitter, under 500 for LinkedIn/Instagram
+2. Be tailored for {platform} (Amazon sellers, DTC brand owners, e-commerce operators)
+3. Lead with a specific, concrete benefit — speed, cost savings, revenue growth, or scale
+4. Reference real numbers when possible (2 minutes, $5,000 agency cost, 30-300% revenue growth, 1,000 listings)
+5. Be ready to post with no placeholders
+6. Include relevant emojis where natural
+7. Be under 280 characters for Twitter, under 500 for LinkedIn/Instagram
 
 Hook Patterns to use:
 {patterns_json}

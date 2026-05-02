@@ -6,9 +6,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 VIRAL_SUBREDDITS = [
-    "marketing", "copywriting", "socialmedia", "Entrepreneur",
-    "startups", "growmybusiness", "digital_marketing", "contentcreation",
-    "tweets", "LinkedInLunatics", "advertising", "branding",
+    # Amazon & e-commerce sellers (primary audience)
+    "FulfillmentByAmazon", "AmazonSeller", "ecommerce", "amazonsellers",
+    # DTC / brand building
+    "Entrepreneur", "startups", "shopify",
+    # Copywriting & conversion (hook patterns)
+    "copywriting", "marketing", "growmybusiness",
+    # Product listing / design
+    "ProductDesign", "branding",
 ]
 
 VIRAL_THRESHOLD = 100
@@ -44,7 +49,7 @@ def crawl_reddit(limit_per_sub: int = 100) -> list[dict]:
     return posts
 
 
-def crawl_twitter_apify(query: str = "marketing OR copywriting OR hooks", max_tweets: int = 200) -> list[dict]:
+def crawl_twitter_apify(query: str = "Amazon listing OR Amazon seller OR ecommerce growth OR product listing design", max_tweets: int = 200) -> list[dict]:
     token = os.getenv("APIFY_API_TOKEN")
     if not token:
         print("  [Twitter/X] Skipped — no APIFY_API_TOKEN set")
