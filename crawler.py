@@ -1,5 +1,5 @@
 import os
-import praw
+import time
 import requests
 from dotenv import load_dotenv
 
@@ -17,31 +17,36 @@ VIRAL_SUBREDDITS = [
 ]
 
 VIRAL_THRESHOLD = 100
+HEADERS = {"User-Agent": "HookMiningEngine/1.0 (hook pattern research)"}
 
 
 def crawl_reddit(limit_per_sub: int = 100) -> list[dict]:
-    reddit = praw.Reddit(
-        client_id=os.getenv("REDDIT_CLIENT_ID"),
-        client_secret=os.getenv("REDDIT_CLIENT_SECRET"),
-        user_agent=os.getenv("REDDIT_USER_AGENT", "HookMiningEngine/1.0"),
-    )
-
     posts = []
+
     for sub_name in VIRAL_SUBREDDITS:
+        url = f"https://www.reddit.com/r/{sub_name}/hot.json?limit={limit_per_sub}"
         try:
-            subreddit = reddit.subreddit(sub_name)
-            for post in subreddit.hot(limit=limit_per_sub):
-                if post.score < VIRAL_THRESHOLD:
+            resp = requests.get(url, headers=HEADERS, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+
+            for child in data.get("data", {}).get("children", []):
+                post = child.get("data", {})
+                score = post.get("score", 0)
+                if score < VIRAL_THRESHOLD:
                     continue
                 posts.append({
-                    "id": f"reddit_{post.id}",
+                    "id": f"reddit_{post['id']}",
                     "source": "reddit",
                     "subreddit_or_topic": sub_name,
-                    "title": post.title,
-                    "body": (post.selftext or "")[:3000],
-                    "score": post.score,
-                    "url": f"https://reddit.com{post.permalink}",
+                    "title": post.get("title", ""),
+                    "body": (post.get("selftext", "") or "")[:3000],
+                    "score": score,
+                    "url": f"https://reddit.com{post.get('permalink', '')}",
                 })
+
+            time.sleep(1)  # respect rate limits
+
         except Exception as e:
             print(f"  [!] Error crawling r/{sub_name}: {e}")
 
