@@ -1,12 +1,10 @@
 import os
 import json
-import anthropic
 from dotenv import load_dotenv
+from ai_client import get_ai_response
 from database import get_top_patterns, save_generated_post
 
 load_dotenv()
-
-client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 DEFAULT_BRAND_VOICE = (
     "Pixii is an AI designer for Amazon listings. It creates beautiful, editable listing designs "
@@ -56,26 +54,17 @@ def generate_posts(count: int = 5, platform: str = "twitter") -> list[dict]:
     ]
 
     try:
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=4096,
-            messages=[{
-                "role": "user",
-                "content": GENERATION_PROMPT.format(
-                    brand_voice=brand_voice,
-                    count=count,
-                    platform=platform,
-                    patterns_json=json.dumps(patterns_for_prompt, indent=2),
-                )
-            }],
-        )
+        text = get_ai_response(GENERATION_PROMPT.format(
+            brand_voice=brand_voice,
+            count=count,
+            platform=platform,
+            patterns_json=json.dumps(patterns_for_prompt, indent=2),
+        ))
 
-        text = response.content[0].text.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        if text.strip().startswith("```"):
+            text = text.strip().split("\n", 1)[1].rsplit("```", 1)[0].strip()
 
         generated = json.loads(text)
-
         pattern_id_map = {p["pattern_name"]: p["id"] for p in patterns}
         for post in generated:
             pid = pattern_id_map.get(post.get("hook_pattern_used"), None)
