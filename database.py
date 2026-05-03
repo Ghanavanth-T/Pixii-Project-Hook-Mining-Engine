@@ -82,6 +82,16 @@ def save_viral_posts(posts: list[dict]):
     return saved
 
 
+def clear_patterns():
+    """Clear all patterns and posts before a fresh pipeline run."""
+    conn = get_connection()
+    conn.execute("DELETE FROM hook_patterns")
+    conn.execute("DELETE FROM generated_posts")
+    conn.execute("DELETE FROM viral_posts")
+    conn.commit()
+    conn.close()
+
+
 def save_hook_patterns(patterns: list[dict], source_post_ids: list[str]):
     conn = get_connection()
     now = datetime.utcnow().isoformat()

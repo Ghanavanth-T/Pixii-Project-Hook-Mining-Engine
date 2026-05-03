@@ -32,8 +32,9 @@ with st.sidebar:
         try:
             from crawler import crawl_all
             from analyzer import analyze_hooks
-            from database import save_viral_posts, save_hook_patterns, start_pipeline_run, finish_pipeline_run
+            from database import save_viral_posts, save_hook_patterns, start_pipeline_run, finish_pipeline_run, clear_patterns
 
+            clear_patterns()
             run_id = start_pipeline_run()
 
             with st.spinner("Step 1/3: Crawling posts..."):
