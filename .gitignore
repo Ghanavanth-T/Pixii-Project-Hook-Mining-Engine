@@ -2,4 +2,4 @@
 __pycache__/
 *.pyc
 hook_library.db
-.streamlit/
+.streamlit/secrets.toml

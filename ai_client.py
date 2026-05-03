@@ -1,6 +1,7 @@
 """
 AI client — auto-detects which API key is set and uses that provider.
 Priority: Groq → Gemini → Anthropic
+Reads from Streamlit secrets (cloud) or .env (local) automatically.
 """
 
 import os
@@ -9,10 +10,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _get_secret(key: str) -> str:
+    """Read from Streamlit secrets if available, else fall back to env vars."""
+    try:
+        import streamlit as st
+        return st.secrets.get(key, os.getenv(key, ""))
+    except Exception:
+        return os.getenv(key, "")
+
+
 def get_ai_response(prompt: str, max_tokens: int = 4096) -> str:
-    groq_key = os.getenv("GROQ_API_KEY")
-    gemini_key = os.getenv("GEMINI_API_KEY")
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+    groq_key = _get_secret("GROQ_API_KEY")
+    gemini_key = _get_secret("GEMINI_API_KEY")
+    anthropic_key = _get_secret("ANTHROPIC_API_KEY")
 
     if groq_key:
         return _call_groq(prompt, groq_key, max_tokens)
@@ -20,14 +30,12 @@ def get_ai_response(prompt: str, max_tokens: int = 4096) -> str:
         try:
             return _call_gemini(prompt, gemini_key, max_tokens)
         except ImportError:
-            raise EnvironmentError(
-                "Gemini package issue. Run: pip install -U google-generativeai"
-            )
+            raise EnvironmentError("Gemini package issue. Run: pip install -U google-generativeai")
     elif anthropic_key:
         return _call_anthropic(prompt, anthropic_key, max_tokens)
     else:
         raise EnvironmentError(
-            "No AI API key found. Set GROQ_API_KEY, GEMINI_API_KEY, or ANTHROPIC_API_KEY in your .env file."
+            "No AI API key found. Set GROQ_API_KEY, GEMINI_API_KEY, or ANTHROPIC_API_KEY."
         )
 
 
@@ -65,10 +73,10 @@ def _call_anthropic(prompt: str, api_key: str, max_tokens: int) -> str:
 
 
 def active_provider() -> str:
-    if os.getenv("GROQ_API_KEY"):
+    if _get_secret("GROQ_API_KEY"):
         return "Groq"
-    elif os.getenv("GEMINI_API_KEY"):
+    elif _get_secret("GEMINI_API_KEY"):
         return "Gemini"
-    elif os.getenv("ANTHROPIC_API_KEY"):
+    elif _get_secret("ANTHROPIC_API_KEY"):
         return "Anthropic"
     return "None"
