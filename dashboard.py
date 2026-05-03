@@ -49,9 +49,14 @@ with st.sidebar:
             st.info(f"✅ Found {len(patterns)} patterns ({new_p} new)")
 
             with st.spinner("Step 3/3: Generating Pixii posts..."):
-                gen_twitter = generate_posts(count=5, platform="twitter")
-                gen_linkedin = generate_posts(count=3, platform="linkedin")
-            total_generated = len(gen_twitter) + len(gen_linkedin)
+                try:
+                    gen_twitter = generate_posts(count=5, platform="twitter")
+                    gen_linkedin = generate_posts(count=3, platform="linkedin")
+                    total_generated = len(gen_twitter) + len(gen_linkedin)
+                except Exception as gen_err:
+                    st.warning(f"⚠️ Generation failed: {gen_err}")
+                    st.code(traceback.format_exc())
+                    gen_twitter, gen_linkedin, total_generated = [], [], 0
 
             finish_pipeline_run(run_id, saved, len(patterns), total_generated)
             st.success(f"🎉 Done! {saved} posts crawled, {len(patterns)} patterns, {total_generated} posts generated.")

@@ -52,29 +52,28 @@ def generate_posts(count: int = 5, platform: str = "twitter") -> list[dict]:
         for p in patterns
     ]
 
-    try:
-        text = get_ai_response(GENERATION_PROMPT.format(
-            brand_voice=brand_voice,
-            count=count,
-            platform=platform,
-            patterns_json=json.dumps(patterns_for_prompt, indent=2),
-        ))
+    # Wait to let Groq rate limits reset after analysis batches
+    import time
+    time.sleep(5)
 
-        if text.strip().startswith("```"):
-            text = text.strip().split("\n", 1)[1].rsplit("```", 1)[0].strip()
+    text = get_ai_response(GENERATION_PROMPT.format(
+        brand_voice=brand_voice,
+        count=count,
+        platform=platform,
+        patterns_json=json.dumps(patterns_for_prompt, indent=2),
+    ))
 
-        generated = json.loads(text)
-        pattern_id_map = {p["pattern_name"]: p["id"] for p in patterns}
-        for post in generated:
-            pid = pattern_id_map.get(post.get("hook_pattern_used"), None)
-            save_generated_post(post["content"], pid or 0, platform)
+    if text.strip().startswith("```"):
+        text = text.strip().split("\n", 1)[1].rsplit("```", 1)[0].strip()
 
-        print(f"[Generator] Created {len(generated)} posts for {platform}")
-        return generated
+    generated = json.loads(text)
+    pattern_id_map = {p["pattern_name"]: p["id"] for p in patterns}
+    for post in generated:
+        pid = pattern_id_map.get(post.get("hook_pattern_used"), None)
+        save_generated_post(str(post.get("content", "")), pid or 0, platform)
 
-    except Exception as e:
-        print(f"[Generator] Error: {e}")
-        return []
+    print(f"[Generator] Created {len(generated)} posts for {platform}")
+    return generated
 
 
 if __name__ == "__main__":
