@@ -1,7 +1,6 @@
-import os
 import json
 from dotenv import load_dotenv
-from ai_client import get_ai_response
+from ai_client import get_ai_response, _get_secret
 from database import get_top_patterns, save_generated_post
 
 load_dotenv()
@@ -40,7 +39,7 @@ Return ONLY valid JSON — no markdown fences."""
 
 
 def generate_posts(count: int = 5, platform: str = "twitter") -> list[dict]:
-    brand_voice = os.getenv("PIXII_BRAND_VOICE", DEFAULT_BRAND_VOICE)
+    brand_voice = _get_secret("PIXII_BRAND_VOICE", DEFAULT_BRAND_VOICE)
     patterns = get_top_patterns(limit=10)
 
     if not patterns:

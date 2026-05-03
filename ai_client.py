@@ -10,13 +10,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def _get_secret(key: str) -> str:
+def _get_secret(key: str, default: str = "") -> str:
     """Read from Streamlit secrets if available, else fall back to env vars."""
     try:
         import streamlit as st
-        return st.secrets.get(key, os.getenv(key, ""))
+        return st.secrets.get(key, os.getenv(key, default))
     except Exception:
-        return os.getenv(key, "")
+        return os.getenv(key, default)
 
 
 def get_ai_response(prompt: str, max_tokens: int = 4096) -> str:
