@@ -16,7 +16,7 @@ VIRAL_SUBREDDITS = [
     "ProductDesign", "branding",
 ]
 
-VIRAL_THRESHOLD = 100
+VIRAL_THRESHOLD = 10
 HEADERS = {"User-Agent": "HookMiningEngine/1.0 (hook pattern research)"}
 
 
