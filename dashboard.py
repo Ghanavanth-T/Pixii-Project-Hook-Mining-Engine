@@ -3,12 +3,14 @@ Hook Mining Engine — Streamlit Dashboard
 Run: streamlit run dashboard.py
 """
 
+import traceback
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 from database import get_stats, get_all_patterns, get_all_generated_posts, get_pipeline_runs
 from generator import generate_posts
 from pipeline import run_pipeline
+from ai_client import active_provider
 
 st.set_page_config(page_title="Hook Mining Engine", page_icon="🪝", layout="wide")
 
@@ -19,21 +21,37 @@ st.caption("Crawl viral posts → Extract hook patterns → Generate posts for P
 with st.sidebar:
     st.header("Controls")
 
+    # Show active AI provider
+    provider = active_provider()
+    if provider == "None":
+        st.error("⚠️ No AI API key found. Add GROQ_API_KEY or GEMINI_API_KEY to Secrets.")
+    else:
+        st.success(f"✅ AI: {provider}")
+
     if st.button("🚀 Run Full Pipeline", use_container_width=True):
-        with st.spinner("Running pipeline... This may take a few minutes."):
-            result = run_pipeline(generate_count=5)
-        st.success(f"Done! Crawled {result['crawled']} posts, found {result['patterns']} patterns, generated {result['generated']} posts.")
-        st.rerun()
+        log = st.empty()
+        try:
+            with st.spinner("Running pipeline... This may take a few minutes."):
+                result = run_pipeline(generate_count=5)
+            st.success(f"Done! Crawled {result['crawled']} posts, found {result['patterns']} patterns, generated {result['generated']} posts.")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Pipeline failed: {e}")
+            st.code(traceback.format_exc())
 
     st.divider()
     st.subheader("Quick Generate")
     platform = st.selectbox("Platform", ["twitter", "linkedin", "instagram"])
     count = st.slider("Number of posts", 1, 10, 5)
     if st.button("✍️ Generate Posts", use_container_width=True):
-        with st.spinner("Generating..."):
-            posts = generate_posts(count=count, platform=platform)
-        st.success(f"Generated {len(posts)} posts!")
-        st.rerun()
+        try:
+            with st.spinner("Generating..."):
+                posts = generate_posts(count=count, platform=platform)
+            st.success(f"Generated {len(posts)} posts!")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Generation failed: {e}")
+            st.code(traceback.format_exc())
 
 # --- Stats ---
 stats = get_stats()
