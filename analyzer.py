@@ -1,4 +1,5 @@
 import json
+import time
 from ai_client import get_ai_response
 
 HOOK_ANALYSIS_PROMPT = """You are an expert content strategist who studies viral hooks — the opening lines or structures that make social media posts go viral.
@@ -18,7 +19,7 @@ VIRAL POSTS:
 
 Return ONLY valid JSON — no markdown fences, no explanation. Just the array."""
 
-BATCH_SIZE = 30
+BATCH_SIZE = 7  # small batches to stay within Groq free tier token limits
 
 
 def _parse_json(text: str) -> list:
@@ -52,6 +53,8 @@ def analyze_hooks(posts: list[dict]) -> list[dict]:
             print(f"  [Analyzer] JSON parse error in batch {i // BATCH_SIZE + 1}: {e}")
         except Exception as e:
             print(f"  [Analyzer] Error in batch {i // BATCH_SIZE + 1}: {e}")
+
+        time.sleep(3)  # wait between batches to respect Groq rate limits
 
     deduplicated = _deduplicate_patterns(all_patterns)
     print(f"[Analyzer] Total unique patterns: {len(deduplicated)}")
