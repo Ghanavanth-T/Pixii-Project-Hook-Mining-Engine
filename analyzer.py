@@ -12,7 +12,7 @@ For each pattern you find, provide:
 - description: 1-2 sentences explaining the pattern and why it works
 - example: A cleaned-up example from the posts (or a synthesized one)
 
-Return a JSON array of hook pattern objects. Find between 5-15 patterns.
+Return a JSON array of 3-5 patterns maximum. Only include genuinely distinct patterns you see in these posts.
 
 VIRAL POSTS:
 {posts_text}
@@ -78,26 +78,17 @@ def analyze_hooks(posts: list[dict]) -> list[dict]:
 
 
 def _deduplicate_patterns(patterns: list[dict]) -> list[dict]:
-    if len(patterns) <= 15:
-        return patterns
+    """Deduplicate by name first (fast), then cap at 30 meaningful patterns."""
+    seen = {}
+    for p in patterns:
+        name = p.get("pattern_name", "").lower().strip()
+        if name and name not in seen:
+            seen[name] = p
 
-    try:
-        text = get_ai_response(
-            f"""Deduplicate and merge these hook patterns. Combine similar ones, keep the best description and example. Return 10-20 unique patterns as a JSON array.
+    unique = list(seen.values())
 
-Patterns:
-{json.dumps(patterns, indent=2)}
-
-Return ONLY valid JSON — no markdown fences."""
-        )
-        return _parse_json(text)
-    except Exception:
-        seen = {}
-        for p in patterns:
-            name = p.get("pattern_name", "").lower().strip()
-            if name not in seen:
-                seen[name] = p
-        return list(seen.values())
+    # Hard cap — hooks are not infinite, 30 is more than enough
+    return unique[:30]
 
 
 if __name__ == "__main__":
