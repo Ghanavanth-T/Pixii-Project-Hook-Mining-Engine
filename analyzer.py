@@ -26,7 +26,23 @@ def _parse_json(text: str) -> list:
     text = text.strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-    return json.loads(text)
+    patterns = json.loads(text)
+    # Sanitize — force all fields to strings so SQLite never gets a dict/list
+    sanitized = []
+    for p in patterns:
+        sanitized.append({
+            "pattern_name": _to_str(p.get("pattern_name", "")),
+            "category":     _to_str(p.get("category", "other")),
+            "description":  _to_str(p.get("description", "")),
+            "example":      _to_str(p.get("example", "")),
+        })
+    return sanitized
+
+
+def _to_str(val) -> str:
+    if isinstance(val, (dict, list)):
+        return json.dumps(val)
+    return str(val) if val is not None else ""
 
 
 def analyze_hooks(posts: list[dict]) -> list[dict]:
