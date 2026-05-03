@@ -71,7 +71,17 @@ def _call_gemini(prompt: str, api_key: str, max_tokens: int) -> str:
         try:
             resp = req.post(url, json=payload, timeout=60)
             resp.raise_for_status()
-            return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+            data = resp.json()
+            candidates = data.get("candidates", [])
+            if not candidates:
+                raise ValueError(f"Gemini returned no candidates. Response: {data}")
+            parts = candidates[0].get("content", {}).get("parts", [])
+            if not parts:
+                raise ValueError(f"Gemini returned empty parts. Candidate: {candidates[0]}")
+            text = parts[0].get("text", "")
+            if not text:
+                raise ValueError(f"Gemini returned empty text. Parts: {parts}")
+            return text
         except Exception as e:
             last_err = e
             continue

@@ -63,8 +63,12 @@ def generate_posts(count: int = 5, platform: str = "twitter") -> list[dict]:
         patterns_json=json.dumps(patterns_for_prompt, indent=2),
     ))
 
-    if text.strip().startswith("```"):
-        text = text.strip().split("\n", 1)[1].rsplit("```", 1)[0].strip()
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+
+    if not text:
+        raise ValueError("AI returned an empty response. Try again in a moment.")
 
     generated = json.loads(text)
     pattern_id_map = {p["pattern_name"]: p["id"] for p in patterns}
