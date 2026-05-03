@@ -89,9 +89,23 @@ def save_hook_patterns(patterns: list[dict], source_post_ids: list[str]):
     new_count = 0
 
     for pat in patterns:
+        # Ensure all fields are strings — AI sometimes returns dicts/lists
+        def to_str(val):
+            if isinstance(val, (dict, list)):
+                return json.dumps(val)
+            return str(val) if val is not None else ""
+
+        name = to_str(pat.get("pattern_name", ""))
+        category = to_str(pat.get("category", "other"))
+        description = to_str(pat.get("description", ""))
+        example = to_str(pat.get("example", ""))
+
+        if not name:
+            continue
+
         existing = conn.execute(
             "SELECT id, frequency, source_post_ids FROM hook_patterns WHERE pattern_name = ?",
-            (pat["pattern_name"],)
+            (name,)
         ).fetchone()
 
         if existing:
@@ -99,14 +113,13 @@ def save_hook_patterns(patterns: list[dict], source_post_ids: list[str]):
             merged = list(set(old_ids + source_post_ids[:10]))[:30]
             conn.execute(
                 "UPDATE hook_patterns SET frequency = ?, last_seen = ?, source_post_ids = ?, description = ? WHERE id = ?",
-                (existing["frequency"] + 1, now, json.dumps(merged), pat.get("description", ""), existing["id"])
+                (existing["frequency"] + 1, now, json.dumps(merged), description, existing["id"])
             )
         else:
             conn.execute(
                 "INSERT INTO hook_patterns (pattern_name, category, description, example, frequency, first_seen, last_seen, source_post_ids) "
                 "VALUES (?, ?, ?, ?, 1, ?, ?, ?)",
-                (pat["pattern_name"], pat.get("category", "other"), pat.get("description", ""),
-                 pat.get("example", ""), now, now, ids_json)
+                (name, category, description, example, now, now, ids_json)
             )
             new_count += 1
 
