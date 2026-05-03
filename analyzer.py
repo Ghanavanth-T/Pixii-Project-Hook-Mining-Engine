@@ -40,7 +40,7 @@ def analyze_hooks(posts: list[dict]) -> list[dict]:
         posts_text = "\n\n---\n\n".join(
             f"[Source: {p['source']} | Score: {p['score']}]\n"
             f"Title: {p.get('title', 'N/A')}\n"
-            f"Body: {p.get('body', '')[:500]}"
+            f"Body: {p.get('body', '')[:200]}"
             for p in batch
         )
 

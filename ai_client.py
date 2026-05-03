@@ -43,7 +43,7 @@ def _call_groq(prompt: str, api_key: str, max_tokens: int) -> str:
     from groq import Groq
     client = Groq(api_key=api_key)
     response = client.chat.completions.create(
-        model="llama3-70b-8192",  # higher free tier limits than llama-3.3-70b-versatile
+        model="llama-3.1-8b-instant",  # 20,000 TPM on free tier — highest available
         messages=[{"role": "user", "content": prompt}],
         max_tokens=max_tokens,
     )
