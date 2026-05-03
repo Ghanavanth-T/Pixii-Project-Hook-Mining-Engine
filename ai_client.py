@@ -24,19 +24,26 @@ def get_ai_response(prompt: str, max_tokens: int = 4096) -> str:
     gemini_key = _get_secret("GEMINI_API_KEY")
     anthropic_key = _get_secret("ANTHROPIC_API_KEY")
 
+    # Try Groq first, fall back to Gemini on rate limit
     if groq_key:
-        return _call_groq(prompt, groq_key, max_tokens)
-    elif gemini_key:
         try:
-            return _call_gemini(prompt, gemini_key, max_tokens)
-        except ImportError:
-            raise EnvironmentError("Gemini package issue. Run: pip install -U google-generativeai")
-    elif anthropic_key:
+            return _call_groq(prompt, groq_key, max_tokens)
+        except Exception as e:
+            if "rate_limit" in str(e).lower() or "429" in str(e):
+                print(f"  [AI] Groq rate limited — falling back to Gemini")
+                if gemini_key:
+                    return _call_gemini(prompt, gemini_key, max_tokens)
+            raise
+
+    if gemini_key:
+        return _call_gemini(prompt, gemini_key, max_tokens)
+
+    if anthropic_key:
         return _call_anthropic(prompt, anthropic_key, max_tokens)
-    else:
-        raise EnvironmentError(
-            "No AI API key found. Set GROQ_API_KEY, GEMINI_API_KEY, or ANTHROPIC_API_KEY."
-        )
+
+    raise EnvironmentError(
+        "No AI API key found. Set GROQ_API_KEY, GEMINI_API_KEY, or ANTHROPIC_API_KEY."
+    )
 
 
 def _call_groq(prompt: str, api_key: str, max_tokens: int) -> str:
@@ -51,14 +58,15 @@ def _call_groq(prompt: str, api_key: str, max_tokens: int) -> str:
 
 
 def _call_gemini(prompt: str, api_key: str, max_tokens: int) -> str:
-    import google.generativeai as genai
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
-    response = model.generate_content(
-        prompt,
-        generation_config=genai.types.GenerationConfig(max_output_tokens=max_tokens),
-    )
-    return response.text
+    import requests as req
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"maxOutputTokens": max_tokens}
+    }
+    resp = req.post(url, json=payload, timeout=60)
+    resp.raise_for_status()
+    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
 
 
 def _call_anthropic(prompt: str, api_key: str, max_tokens: int) -> str:
