@@ -2,34 +2,43 @@ import json
 import time
 from ai_client import get_ai_response
 
-HOOK_ANALYSIS_PROMPT = """You are an expert content strategist who studies viral hooks — the opening lines or structures that make social media posts go viral.
+HOOK_ANALYSIS_PROMPT = """You are an expert content strategist analyzing viral social media posts.
 
-Analyze the following batch of viral posts and extract the HOOK PATTERNS you see. A hook pattern is a repeatable structural or psychological technique used in the opening of a post to grab attention.
+Analyze these posts and extract DISTINCT hook patterns — the structural/psychological techniques used in opening lines to grab attention.
 
-For each pattern you find, provide:
-- pattern_name: A short, memorable name (e.g., "Controversial Hot Take", "Before/After Transformation")
+For each pattern provide:
+- pattern_name: Specific, memorable name (NOT generic like "Question" or "Bold Claim" — be specific e.g. "The Exact Number Claim", "The Painful Mistake Confession")
 - category: One of [curiosity_gap, social_proof, contrarian, storytelling, listicle, question, bold_claim, vulnerability, data_driven, humor, urgency, other]
-- description: 1-2 sentences explaining the pattern and why it works
-- example: A cleaned-up example from the posts (or a synthesized one)
+- description: Why this pattern works psychologically (1-2 sentences)
+- example: Best example from the posts below (copy the actual opening line)
 
-Return a JSON array of 3-5 patterns maximum. Only include genuinely distinct patterns you see in these posts.
+Find 5-8 DISTINCT patterns. Be specific — avoid generic names. Only include patterns clearly visible in these posts.
 
-VIRAL POSTS:
+POSTS:
 {posts_text}
 
-Return ONLY valid JSON — no markdown fences, no explanation. Just the array."""
+Return ONLY a valid JSON array. No markdown, no explanation."""
 
-BATCH_SIZE = 7  # small batches to stay within Groq free tier token limits
+BATCH_SIZE = 20  # larger batches = more context = more varied patterns + fewer API calls
+
+
+def _to_str(val) -> str:
+    if isinstance(val, (dict, list)):
+        return json.dumps(val)
+    return str(val) if val is not None else ""
 
 
 def _parse_json(text: str) -> list:
     text = text.strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+    if not text:
+        return []
     patterns = json.loads(text)
-    # Sanitize — force all fields to strings so SQLite never gets a dict/list
     sanitized = []
     for p in patterns:
+        if not isinstance(p, dict):
+            continue
         sanitized.append({
             "pattern_name": _to_str(p.get("pattern_name", "")),
             "category":     _to_str(p.get("category", "other")),
@@ -39,56 +48,58 @@ def _parse_json(text: str) -> list:
     return sanitized
 
 
-def _to_str(val) -> str:
-    if isinstance(val, (dict, list)):
-        return json.dumps(val)
-    return str(val) if val is not None else ""
-
-
 def analyze_hooks(posts: list[dict]) -> list[dict]:
     if not posts:
         return []
 
     all_patterns = []
+    total_batches = (len(posts) + BATCH_SIZE - 1) // BATCH_SIZE
 
     for i in range(0, len(posts), BATCH_SIZE):
         batch = posts[i:i + BATCH_SIZE]
+        batch_num = i // BATCH_SIZE + 1
+
         posts_text = "\n\n---\n\n".join(
-            f"[Source: {p['source']} | Score: {p['score']}]\n"
-            f"Title: {p.get('title', 'N/A')}\n"
-            f"Body: {p.get('body', '')[:200]}"
+            f"[{p['source'].upper()} | Score:{p['score']}]\n"
+            f"Title: {p.get('title', '').strip()}\n"
+            f"Body: {p.get('body', '').strip()[:150]}"
             for p in batch
         )
 
         try:
-            text = get_ai_response(HOOK_ANALYSIS_PROMPT.format(posts_text=posts_text))
+            text = get_ai_response(HOOK_ANALYSIS_PROMPT.format(posts_text=posts_text), max_tokens=1500)
             patterns = _parse_json(text)
-            all_patterns.extend(patterns)
-            print(f"  [Analyzer] Batch {i // BATCH_SIZE + 1}: found {len(patterns)} patterns")
-        except json.JSONDecodeError as e:
-            print(f"  [Analyzer] JSON parse error in batch {i // BATCH_SIZE + 1}: {e}")
+            if patterns:
+                all_patterns.extend(patterns)
+                print(f"  [Analyzer] Batch {batch_num}/{total_batches}: {len(patterns)} patterns")
+        except json.JSONDecodeError:
+            print(f"  [Analyzer] JSON error in batch {batch_num} — skipping")
         except Exception as e:
-            print(f"  [Analyzer] Error in batch {i // BATCH_SIZE + 1}: {e}")
+            print(f"  [Analyzer] Error in batch {batch_num}: {e}")
 
-        time.sleep(3)  # wait between batches to respect Groq rate limits
+        if batch_num < total_batches:
+            time.sleep(2)
 
     deduplicated = _deduplicate_patterns(all_patterns)
-    print(f"[Analyzer] Total unique patterns: {len(deduplicated)}")
+    print(f"[Analyzer] Final: {len(deduplicated)} unique patterns from {len(all_patterns)} raw")
     return deduplicated
 
 
 def _deduplicate_patterns(patterns: list[dict]) -> list[dict]:
-    """Deduplicate by name first (fast), then cap at 30 meaningful patterns."""
+    """Deduplicate by normalized name, keep highest-quality example."""
     seen = {}
     for p in patterns:
         name = p.get("pattern_name", "").lower().strip()
-        if name and name not in seen:
+        if not name:
+            continue
+        # Keep the one with the longer, more specific description
+        if name not in seen or len(p.get("description", "")) > len(seen[name].get("description", "")):
             seen[name] = p
 
     unique = list(seen.values())
-
-    # Hard cap — hooks are not infinite, 30 is more than enough
-    return unique[:30]
+    # Sort by category diversity then cap at 40
+    unique.sort(key=lambda x: x.get("category", ""))
+    return unique[:40]
 
 
 if __name__ == "__main__":
