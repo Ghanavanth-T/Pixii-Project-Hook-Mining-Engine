@@ -59,14 +59,23 @@ def _call_groq(prompt: str, api_key: str, max_tokens: int) -> str:
 
 def _call_gemini(prompt: str, api_key: str, max_tokens: int) -> str:
     import requests as req
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"maxOutputTokens": max_tokens}
-    }
-    resp = req.post(url, json=payload, timeout=60)
-    resp.raise_for_status()
-    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+    # Try models in order until one works
+    models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-latest"]
+    last_err = None
+    for model in models:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"maxOutputTokens": max_tokens}
+        }
+        try:
+            resp = req.post(url, json=payload, timeout=60)
+            resp.raise_for_status()
+            return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+        except Exception as e:
+            last_err = e
+            continue
+    raise last_err
 
 
 def _call_anthropic(prompt: str, api_key: str, max_tokens: int) -> str:
