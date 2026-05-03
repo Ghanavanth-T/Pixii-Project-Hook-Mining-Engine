@@ -1,8 +1,7 @@
-import os
 import time
 import requests
+import xml.etree.ElementTree as ET
 from dotenv import load_dotenv
-from ai_client import _get_secret
 
 load_dotenv()
 
@@ -19,7 +18,6 @@ VIRAL_SUBREDDITS = [
 
 VIRAL_THRESHOLD = 10
 
-# Rotate user agents to avoid blocks
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -27,11 +25,9 @@ USER_AGENTS = [
 ]
 
 
-def crawl_reddit_direct(limit_per_sub: int = 100) -> list[dict]:
-    """Crawl Reddit using public JSON API — works locally, may be blocked on cloud."""
-    import random
+def crawl_reddit_json(limit_per_sub: int = 100) -> list[dict]:
+    """Crawl Reddit via public JSON API."""
     posts = []
-
     for i, sub_name in enumerate(VIRAL_SUBREDDITS):
         url = f"https://www.reddit.com/r/{sub_name}/hot.json?limit={limit_per_sub}"
         headers = {"User-Agent": USER_AGENTS[i % len(USER_AGENTS)]}
@@ -39,7 +35,6 @@ def crawl_reddit_direct(limit_per_sub: int = 100) -> list[dict]:
             resp = requests.get(url, headers=headers, timeout=15)
             resp.raise_for_status()
             data = resp.json()
-
             for child in data.get("data", {}).get("children", []):
                 post = child.get("data", {})
                 score = post.get("score", 0)
@@ -54,104 +49,96 @@ def crawl_reddit_direct(limit_per_sub: int = 100) -> list[dict]:
                     "score": score,
                     "url": f"https://reddit.com{post.get('permalink', '')}",
                 })
-
             time.sleep(1)
-
         except Exception as e:
-            print(f"  [!] Error crawling r/{sub_name}: {e}")
-
+            print(f"  [!] JSON error r/{sub_name}: {e}")
     return posts
 
 
-def crawl_reddit_apify(token: str) -> list[dict]:
-    """Crawl Reddit via Apify — works on cloud, bypasses IP blocks."""
+def crawl_reddit_rss() -> list[dict]:
+    """Crawl Reddit via RSS feeds — more reliable on cloud servers."""
     posts = []
-
-    for sub_name in VIRAL_SUBREDDITS[:6]:  # limit to avoid long timeouts
-        run_url = "https://api.apify.com/v2/acts/trudax~reddit-scraper-lite/run-sync-get-dataset-items"
-        payload = {
-            "startUrls": [{"url": f"https://www.reddit.com/r/{sub_name}/hot/"}],
-            "maxItems": 50,
-        }
-        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-
+    for i, sub_name in enumerate(VIRAL_SUBREDDITS):
+        url = f"https://www.reddit.com/r/{sub_name}/hot.rss?limit=50"
+        headers = {"User-Agent": USER_AGENTS[i % len(USER_AGENTS)]}
         try:
-            resp = requests.post(run_url, json=payload, headers=headers, timeout=60)
+            resp = requests.get(url, headers=headers, timeout=15)
             resp.raise_for_status()
-            items = resp.json()
+            root = ET.fromstring(resp.content)
+            ns = {"atom": "http://www.w3.org/2005/Atom"}
+            entries = root.findall("atom:entry", ns)
 
-            for item in items:
-                score = item.get("upVotes", item.get("score", 0))
-                if score < VIRAL_THRESHOLD:
-                    continue
+            for j, entry in enumerate(entries):
+                title = entry.findtext("atom:title", default="", namespaces=ns)
+                content = entry.findtext("atom:content", default="", namespaces=ns) or ""
+                link = entry.findtext("atom:link", default="", namespaces=ns)
+                # RSS doesn't have scores, use position as proxy (top = more viral)
+                score = max(50 - j * 2, VIRAL_THRESHOLD)
                 posts.append({
-                    "id": f"reddit_{item.get('id', item.get('url', '')[-10:])}",
+                    "id": f"reddit_rss_{sub_name}_{j}",
                     "source": "reddit",
                     "subreddit_or_topic": sub_name,
-                    "title": item.get("title", ""),
-                    "body": (item.get("body", item.get("text", "")) or "")[:3000],
+                    "title": title,
+                    "body": content[:3000],
                     "score": score,
-                    "url": item.get("url", ""),
+                    "url": link,
                 })
-
+            time.sleep(1)
         except Exception as e:
-            print(f"  [!] Apify Reddit error for r/{sub_name}: {e}")
-
+            print(f"  [!] RSS error r/{sub_name}: {e}")
     return posts
 
 
-def crawl_reddit(limit_per_sub: int = 100) -> list[dict]:
-    """Try direct Reddit first, fall back to Apify if blocked."""
-    token = _get_secret("APIFY_API_TOKEN")
-
-    # Try direct first
-    posts = crawl_reddit_direct(limit_per_sub)
-
-    if len(posts) == 0 and token:
-        print("  [Reddit] Direct crawl returned 0 posts — trying Apify fallback...")
-        posts = crawl_reddit_apify(token)
-
-    print(f"  [Reddit] Crawled {len(posts)} viral posts from {len(VIRAL_SUBREDDITS)} subreddits")
-    return posts
-
-
-def crawl_twitter_apify(query: str = "Amazon listing OR Amazon seller OR ecommerce growth OR product listing design", max_tweets: int = 200) -> list[dict]:
-    token = _get_secret("APIFY_API_TOKEN")
-    if not token:
-        print("  [Twitter/X] Skipped — no APIFY_API_TOKEN set")
-        return []
-
-    run_url = "https://api.apify.com/v2/acts/quacker~twitter-scraper/run-sync-get-dataset-items"
-    payload = {
-        "searchTerms": [query],
-        "maxTweets": max_tweets,
-        "sort": "Top",
-    }
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-
-    try:
-        resp = requests.post(run_url, json=payload, headers=headers, timeout=120)
-        resp.raise_for_status()
-        tweets = resp.json()
-    except Exception as e:
-        print(f"  [Twitter/X] Apify error: {e}")
-        return []
-
+def crawl_hackernews(pages: int = 3) -> list[dict]:
+    """
+    Crawl HackerNews top stories — 100% free, no auth needed.
+    Great source of startup, ecommerce, and marketing hooks.
+    """
     posts = []
-    for t in tweets:
-        if t.get("likeCount", 0) < 50:
-            continue
-        posts.append({
-            "id": f"twitter_{t.get('id', '')}",
-            "source": "twitter",
-            "subreddit_or_topic": "twitter_search",
-            "title": "",
-            "body": t.get("full_text", t.get("text", ""))[:3000],
-            "score": t.get("likeCount", 0) + t.get("retweetCount", 0),
-            "url": t.get("url", ""),
-        })
+    try:
+        # Get top story IDs
+        resp = requests.get("https://hacker-news.firebaseio.com/v0/topstories.json", timeout=10)
+        story_ids = resp.json()[:pages * 30]
 
-    print(f"  [Twitter/X] Crawled {len(posts)} viral tweets via Apify")
+        for story_id in story_ids:
+            try:
+                story_resp = requests.get(
+                    f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json",
+                    timeout=10
+                )
+                story = story_resp.json()
+                if not story or story.get("type") != "story":
+                    continue
+                score = story.get("score", 0)
+                if score < 50:
+                    continue
+                posts.append({
+                    "id": f"hn_{story_id}",
+                    "source": "hackernews",
+                    "subreddit_or_topic": "hackernews",
+                    "title": story.get("title", ""),
+                    "body": story.get("text", "") or "",
+                    "score": score,
+                    "url": story.get("url", f"https://news.ycombinator.com/item?id={story_id}"),
+                })
+                time.sleep(0.1)
+            except Exception:
+                continue
+
+    except Exception as e:
+        print(f"  [!] HackerNews error: {e}")
+
+    print(f"  [HackerNews] Crawled {len(posts)} posts")
+    return posts
+
+
+def crawl_reddit(limit_per_sub: int = 50) -> list[dict]:
+    """Try JSON first, fall back to RSS if blocked."""
+    posts = crawl_reddit_json(limit_per_sub)
+    if len(posts) == 0:
+        print("  [Reddit] JSON blocked — trying RSS fallback...")
+        posts = crawl_reddit_rss()
+    print(f"  [Reddit] Crawled {len(posts)} posts from {len(VIRAL_SUBREDDITS)} subreddits")
     return posts
 
 
@@ -159,9 +146,9 @@ def crawl_all() -> list[dict]:
     print("[Crawler] Starting crawl...")
     posts = []
     posts.extend(crawl_reddit())
-    posts.extend(crawl_twitter_apify())
+    posts.extend(crawl_hackernews())
     posts.sort(key=lambda p: p.get("score", 0), reverse=True)
-    print(f"[Crawler] Total: {len(posts)} viral posts collected")
+    print(f"[Crawler] Total: {len(posts)} posts collected")
     return posts
 
 
