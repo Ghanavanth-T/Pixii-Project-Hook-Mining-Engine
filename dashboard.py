@@ -30,16 +30,18 @@ with st.sidebar:
 
     if st.button("🚀 Run Full Pipeline", use_container_width=True):
         try:
+            from crawler import crawl_all
+            from analyzer import analyze_hooks
+            from database import save_viral_posts, save_hook_patterns, start_pipeline_run, finish_pipeline_run
+
+            run_id = start_pipeline_run()
+
             with st.spinner("Step 1/3: Crawling posts..."):
-                from crawler import crawl_all
-                from database import save_viral_posts
                 posts = crawl_all()
                 saved = save_viral_posts(posts)
             st.info(f"✅ Crawled {len(posts)} posts")
 
             with st.spinner("Step 2/3: Analyzing hooks with AI..."):
-                from analyzer import analyze_hooks
-                from database import save_hook_patterns
                 patterns = analyze_hooks(posts)
                 post_ids = [p["id"] for p in posts[:30]]
                 new_p = save_hook_patterns(patterns, post_ids)
@@ -48,7 +50,10 @@ with st.sidebar:
             with st.spinner("Step 3/3: Generating Pixii posts..."):
                 gen_twitter = generate_posts(count=5, platform="twitter")
                 gen_linkedin = generate_posts(count=3, platform="linkedin")
-            st.success(f"🎉 Done! {saved} posts crawled, {len(patterns)} patterns, {len(gen_twitter)+len(gen_linkedin)} posts generated.")
+            total_generated = len(gen_twitter) + len(gen_linkedin)
+
+            finish_pipeline_run(run_id, saved, len(patterns), total_generated)
+            st.success(f"🎉 Done! {saved} posts crawled, {len(patterns)} patterns, {total_generated} posts generated.")
             st.rerun()
         except Exception as e:
             st.error(f"❌ Failed at this step: {e}")
